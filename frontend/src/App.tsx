@@ -33,6 +33,7 @@ import { useAuth, getToken } from "./hooks/useAuth";
 import { LoginScreen } from "./components/auth/LoginScreen";
 import { useConversationTree } from "./hooks/useConversationTree";
 import "./styles/theme.css";
+import { API_BASE as BASE } from "./lib/config";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ export default function App() {
     async function loadDefaultCollection() {
       try {
         const res = await fetch(
-          `${(import.meta as any).env?.VITE_API_URL ?? "http://localhost:8000"}/rag/collections`,
+          `${BASE}/rag/collections`,
           { headers: { Authorization: `Bearer ${getToken() ?? ""}` } }
         );
         if (!res.ok) return;
@@ -161,7 +162,6 @@ export default function App() {
 
   // Vérifier si un admin existe (avant connexion, pour le setup initial)
   useEffect(() => {
-    const BASE = (import.meta as any).env?.VITE_API_URL ?? "http://localhost:8000";
     fetch(`${BASE}/auth/admin-exists`)
       .then(r => r.json())
       .then(d => setAdminExists(d.exists))
@@ -169,7 +169,6 @@ export default function App() {
   }, []);
 
   async function handleSetupAdmin(username: string, email: string, password: string) {
-    const BASE = (import.meta as any).env?.VITE_API_URL ?? "http://localhost:8000";
     const res = await fetch(`${BASE}/auth/setup-admin`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -27,8 +27,8 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { API_BASE as BASE } from "../lib/config";
 
-const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "promethee_token";
 const USER_KEY  = "promethee_user";
 

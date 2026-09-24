@@ -20,8 +20,7 @@
  */
 
 import { getToken } from "../hooks/useAuth";
-
-const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+import { API_BASE as BASE } from "./config";
 
 async function request<T>(
   method: string,

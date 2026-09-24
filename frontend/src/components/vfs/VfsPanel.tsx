@@ -37,8 +37,7 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import { getToken } from "../../hooks/useAuth";
-
-const BASE = (import.meta as any).env?.VITE_API_URL ?? "http://localhost:8000";
+import { API_BASE as BASE } from "../../lib/config";
 
 function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = getToken();

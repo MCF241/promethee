@@ -40,6 +40,7 @@ import {
   AlignmentType, ShadingType, ImageRun,
 } from "docx";
 import { cleanEChartsCode, buildEChartsDefaults, mergeEChartsOption } from "./echarts-defaults";
+import { API_BASE as BASE } from "./config";
 
 // ── Palette de couleurs du document ─────────────────────────────────────────
 
@@ -459,7 +460,6 @@ export async function generateDocx(
   const formData = new FormData();
   formData.append("file", blob, safeName);
 
-  const BASE = (import.meta as any).env?.VITE_API_URL ?? "http://localhost:8000";
   const res  = await fetch(`${BASE}/vfs/save-blob`, {
     method: "POST",
     headers: token ? { Authorization: `Bearer ${token}` } : {},
