@@ -43,6 +43,7 @@ import { useTheme } from "../../lib/useTheme";
 import { markdownToHtml } from "../../lib/markdownToHtml";
 import { generateDocx } from "../../lib/docx";
 import type { Artifact } from "../../hooks/useArtifactPanel";
+import { copierTexte, copierHtml, copierImage } from "../../lib/clipboard";
 
 // ── Icônes par type ─────────────────────────────────────────────────────────
 
@@ -329,7 +330,7 @@ function CopyToolbar({ artifact, onDownloadPng, onCopyPng }: {
         <CopyBtn
           label="📋 Copier (JSON)"
           title="Copier la config ECharts"
-          onCopy={() => navigator.clipboard.writeText(content)}
+          onCopy={() => copierTexte(content)}
         />
         <CopyBtn
           label="📋 Copier image"
@@ -349,7 +350,7 @@ function CopyToolbar({ artifact, onDownloadPng, onCopyPng }: {
         <CopyBtn
           label="📋 Copier (brut)"
           title="Copier le code source"
-          onCopy={() => navigator.clipboard.writeText(content)}
+          onCopy={() => copierTexte(content)}
         />
         {isMermaid && onCopyPng && (
           <CopyBtn
@@ -373,10 +374,7 @@ function CopyToolbar({ artifact, onDownloadPng, onCopyPng }: {
           onCopy={async () => {
             // Convertit le data URI en blob et le copie
             const res  = await fetch(content);
-            const blob = await res.blob();
-            await navigator.clipboard.write([
-              new ClipboardItem({ [blob.type]: blob }),
-            ]);
+            await copierImage(await res.blob());
           }}
         />
       </div>
@@ -391,17 +389,13 @@ function CopyToolbar({ artifact, onDownloadPng, onCopyPng }: {
         <CopyBtn
           label="📋 Copier (brut)"
           title="Copier le Markdown brut"
-          onCopy={() => navigator.clipboard.writeText(content)}
+          onCopy={() => copierTexte(content)}
         />
         <CopyBtn
           label="📄 Copier (Word)"
           title="Copier en HTML mis en forme (Word, LibreOffice, Pages…)"
           onCopy={async () => {
-            const html = markdownToHtml(content);
-            const blob = new Blob([html], { type: "text/html" });
-            await navigator.clipboard.write([
-              new ClipboardItem({ "text/html": blob }),
-            ]);
+            await copierHtml(markdownToHtml(content), content);
           }}
         />
         <DocxDownloadBtn content={content} filename={`${slug}.docx`} />
@@ -417,17 +411,13 @@ function CopyToolbar({ artifact, onDownloadPng, onCopyPng }: {
       <CopyBtn
         label="📋 Copier (brut)"
         title="Copier le texte Markdown brut"
-        onCopy={() => navigator.clipboard.writeText(content)}
+        onCopy={() => copierTexte(content)}
       />
       <CopyBtn
         label="📄 Copier (Word)"
         title="Copier en HTML mis en forme (Word, LibreOffice, Pages…)"
         onCopy={async () => {
-          const html = markdownToHtml(content);
-          const blob = new Blob([html], { type: "text/html" });
-          await navigator.clipboard.write([
-            new ClipboardItem({ "text/html": blob }),
-          ]);
+          await copierHtml(markdownToHtml(content), content);
         }}
       />
       {isDownloadable && (
@@ -967,10 +957,7 @@ export const ArtifactPanel = memo(function ArtifactPanel({
     const dataUrl = getEchartsDataURLClean(chart, 2);
     // Convertir le data URI en Blob PNG
     const res  = await fetch(dataUrl);
-    const blob = await res.blob();
-    await navigator.clipboard.write([
-      new ClipboardItem({ "image/png": blob }),
-    ]);
+    await copierImage(await res.blob());
   };
 
   /**
@@ -1032,8 +1019,7 @@ export const ArtifactPanel = memo(function ArtifactPanel({
   };
 
   const copyMermaidPng = async () => {
-    const blob = await mermaidSvgToPngBlob(2);
-    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    await copierImage(await mermaidSvgToPngBlob(2));
   };
 
   return (
