@@ -5,6 +5,9 @@
 # ── Secrets & configuration locale ──────────────────────────
 .env
 *.env
+# Sauvegardes horodatées produites par ./install.sh --reinstall : elles
+# contiennent les anciens secrets et ne doivent jamais être committées.
+.env.bak.*
 
 # ── fonctions en test ──────────────────────────
 qdrant_manager/

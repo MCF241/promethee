@@ -59,6 +59,10 @@ Deux modes d'installation sont disponibles selon l'usage :
 | [🧑‍💻 Développement local (venv)](#-développement-local-avec-venv) | Modifier le code, tester, contribuer |
 | [🐳 Production (Docker)](#-déploiement-en-production-avec-docker) | Déployer une instance stable multi-utilisateur |
 
+Pour le mode Docker, `./install.sh` déroule l'installation de bout en bout et
+propose au démarrage le choix entre une installation **locale** et une
+installation **serveur**.
+
 ---
 
 ## 🧑‍💻 Développement local avec venv
@@ -148,14 +152,87 @@ npm run dev
 
 Ce mode déploie la pile complète (Prométhée + Qdrant + Garage S3) via Docker Compose. C'est la méthode recommandée pour une utilisation en production.
 
-> 📖 **Documentation complète** : [`documentation/promethee_guide_installation.pdf`](documentation/promethee_guide_installation.pdf)  
-> Ce guide couvre l'architecture, le dépannage et la référence complète des variables d'environnement.
+> 📖 **Guide du script d'installation** : [`documentation/guide_installation_script.md`](documentation/guide_installation_script.md)  
+> Rédigé pour l'utilisateur qui installe — y compris non informaticien : ce que le script demande, ce qu'il fait, et quoi faire en cas de problème.
+>
+> 📖 **Procédure manuelle détaillée** : [`documentation/promethee_guide_installation.pdf`](documentation/promethee_guide_installation.pdf)  
+> Architecture, dépannage et référence complète des variables d'environnement.
 
 ### Prérequis
 
-- Docker Engine 24.x ou supérieur
-- Docker Compose v2.x
+- Un moteur de conteneurs, au choix :
+  - **Docker** Engine 24.x ou supérieur + Docker Compose v2.x
+  - **Podman** 4.x ou supérieur + `podman compose` (ou `podman-compose`)
+  - **`container`** (moteur natif d'Apple, macOS 26+) — voir la réserve ci-dessous
 - Ports libres sur l'hôte : **8000** (app), **6333/6334** (Qdrant), **3900/3901** (Garage)
+
+> **Le moteur d'Apple n'embarque pas de compose.** La demande a été écartée en
+> amont ([apple/container#239](https://github.com/apple/container/pull/239)), les
+> mainteneurs renvoyant vers le mécanisme de plugins
+> (`/usr/local/libexec/container/plugins`). Des plugins tiers fournissent bien
+> `container compose` — par exemple
+> [container-compose/compose](https://github.com/container-compose/compose) —
+> et `install.sh` les détecte et les accepte.
+>
+> Deux réserves avant de prendre cette voie :
+> - Les verbes de plugins n'apparaissent qu'une fois les services démarrés
+>   (`container system start`). Tant qu'ils sont arrêtés, la CLI répond
+>   « Plugins are unavailable » à **toute** sous-commande inconnue : ce message
+>   ne dit donc rien de la présence réelle d'un compose.
+> - Ces plugins réimplémentent la spécification Compose partiellement, or la pile
+>   séquence `garage-config → garage → garage-init` via
+>   `depends_on: condition: service_healthy`. Si cette condition n'est pas
+>   honorée, `garage-init` démarre trop tôt et échoue. Podman et Docker restent
+>   les moteurs éprouvés.
+
+### Installation guidée — `./install.sh` (recommandé)
+
+Le script déroule la procédure complète décrite ci-dessous : vérification des
+prérequis, génération des secrets, récupération du `GARAGE_NODE_ID`, build et
+vérification de la pile. Il détecte seul le moteur disponible — Docker s'il est
+présent, Podman sinon — et `prom.sh` s'appuie sur la même détection.
+
+```bash
+./install.sh
+```
+
+Il commence par rappeler qu'un gestionnaire de conteneurs est indispensable —
+Prométhée n'existe pas en version autonome — et demande confirmation. Si vous
+répondez **non**, il vous invite à contacter votre administrateur système et
+s'arrête sans rien modifier.
+
+Il demande ensuite le mode d'installation :
+
+| Mode | Adresse d'écoute | Usage |
+|---|---|---|
+| **local** | `127.0.0.1:8000` | Poste de travail personnel — rien n'est exposé sur le réseau |
+| **serveur** | `0.0.0.0:8000` | Instance partagée, directement ou derrière un reverse proxy |
+
+Le mode ne change pas l'image construite : le frontend émet des URL relatives et
+suit l'origine sur laquelle il est servi. Il pilote uniquement `BIND_ADDRESS`,
+`SERVER_PORT` et `ALLOWED_ORIGINS` dans `.env`.
+
+Options principales :
+
+```bash
+./install.sh --mode local -y                                  # poste personnel, sans question
+./install.sh --mode serveur --domaine https://ia.exemple.fr   # instance publique
+./install.sh --reinstall                                      # repart d'un .env neuf (l'ancien est sauvegardé)
+./install.sh --no-start                                       # prépare .env et le Node ID, sans démarrer
+./install.sh --moteur podman                                  # impose le moteur (défaut : détection automatique)
+./install.sh --help                                           # liste complète
+```
+
+Le script est **rejouable** : relancé sur une installation existante, il conserve
+les secrets et la clé API déjà renseignés et ne met à jour que ce qui a changé.
+
+> **Il n'existe pas d'installation « autonome ».** Le RAG, la mémoire long terme
+> et le système de fichiers virtuel s'adossent directement à Qdrant et Garage :
+> un environnement Python seul ne suffit pas à faire fonctionner l'application.
+> Un gestionnaire de conteneurs est donc requis dans tous les cas.
+
+> Les étapes ci-dessous décrivent la même procédure **à la main**, utile pour
+> comprendre ce que fait le script ou pour diagnostiquer une installation.
 
 ### Étape 1 — Configurer le fichier `.env`
 
@@ -172,6 +249,10 @@ Renseignez au minimum ces variables dans `.env` :
 | `GARAGE_ACCESS_KEY` | Identifiant clé S3 (format : `GK` + 24 hex) |
 | `GARAGE_SECRET_KEY` | Secret clé S3 (64 hex) — générer avec `openssl rand -hex 32` |
 | `GARAGE_NODE_ID` | Laisser vide pour l'instant (voir Étape 2) |
+
+> Les commandes ci-dessous sont écrites pour Docker. **Sous Podman**, remplacez
+> `docker compose` par `podman compose` et `docker exec` par `podman exec` —
+> ou laissez `./install.sh` s'en charger, il détecte le moteur tout seul.
 
 ### Étape 2 — Récupérer le `GARAGE_NODE_ID` ⚠️
 
@@ -242,8 +323,6 @@ VITE_API_URL=https://api.example.org VITE_WS_URL=wss://api.example.org npm run b
 ```
 
 et renseignez alors `ALLOWED_ORIGINS` avec l'origine du frontend.
-
----
 
 ---
 
@@ -494,6 +573,9 @@ Types de graphiques supportés : barres, courbes, aires, camemberts, nuages de p
 
 | Script | Description |
 |---|---|
+| `install.sh` | Installation guidée de la pile Docker, au choix en mode local ou serveur. Voir [Déploiement Docker](#-déploiement-en-production-avec-docker). |
+| `prom.sh` | Gestion de la pile au quotidien : build, up, down, logs, status, shell. Variable `PROMETHEE_MOTEUR` pour imposer le moteur. |
+| `scripts/container-engine.sh` | Bibliothèque de détection du moteur de conteneurs, partagée par `install.sh` et `prom.sh`. |
 | `scripts/download_katex.py` | Télécharge les assets KaTeX (JS, CSS, polices woff2) dans `assets/katex/`. À exécuter une seule fois après le clonage. |
 | `scripts/download_mermaid.py` | Télécharge les assets Mermaid (mermaid.min.js) dans `assets/mermaid/`. À exécuter une seule fois après le clonage. |
 
