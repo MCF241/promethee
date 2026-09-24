@@ -153,14 +153,14 @@ ce_detect() {
         container)
             CE_ENGINE_LABEL="container (Apple)"
             if ! container system status >/dev/null 2>&1; then
-                CE_ERROR="Le moteur « container » d'Apple est installé mais ses services ne tournent pas. Lancez 'container system start' puis relancez. Attention : container n'embarque pas de compose, il faut qu'un plugin tiers y soit installé (par exemple https://github.com/container-compose/compose)."
+                CE_ERROR="Le moteur « container » d'Apple est installé mais ses services ne tournent pas. Lancez 'container system start' puis relancez. Notez que container n'embarque pas de compose : un plugin tiers est un PRÉREQUIS, à installer avant (voir documentation/guide_installation_script.md)."
                 return 1
             fi
             if container compose --help >/dev/null 2>&1; then
                 CE_COMPOSE="container compose"
                 CE_CONTAINER_PLUGIN=1
             else
-                CE_ERROR="Le moteur « container » d'Apple tourne, mais aucun plugin compose n'y est installé : Apple a écarté le compose natif (apple/container#239) et renvoie vers les plugins. Installez-en un (https://github.com/container-compose/compose), ou utilisez Podman / Docker."
+                CE_ERROR="Le moteur « container » d'Apple tourne, mais aucun plugin compose n'y est installé. C'est un prérequis : Apple a écarté le compose natif (apple/container#239) au profit des plugins. Un plugin tiers tel que https://github.com/container-compose/compose exige container >= 1.4.1 et un accès administrateur (le répertoire de plugins appartient à root). Attention : l'installeur de container efface ce répertoire à chaque mise à jour, le plugin est donc à réinstaller après chaque montée de version. Podman et Docker n'imposent aucune de ces contraintes."
                 return 1
             fi
             ;;

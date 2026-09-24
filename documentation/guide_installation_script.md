@@ -62,14 +62,61 @@ vous le rappeler et vous demander confirmation.
 Le script les détecte tout seul et choisit le plus adapté. Vous n'avez rien à
 indiquer.
 
-> **Réserve sur le moteur d'Apple.** Apple a écarté la prise en charge native de
-> Compose ([apple/container#239](https://github.com/apple/container/pull/239)) au
-> profit d'un mécanisme de plugins. Un plugin tiers est donc nécessaire, par
-> exemple [container-compose/compose](https://github.com/container-compose/compose),
-> et les services doivent tourner (`container system start`). Ces plugins
-> réimplémentent Compose partiellement : ils risquent de ne pas respecter l'ordre
-> de démarrage dont dépend le stockage. Le script vous prévient et demande
-> confirmation, avec **non** par défaut. Préférez Docker ou Podman.
+### Le cas particulier du moteur d'Apple
+
+Apple a écarté la prise en charge native de Compose
+([apple/container#239](https://github.com/apple/container/pull/239)) au profit
+d'un mécanisme de plugins. **Un plugin compose tiers est donc un prérequis**, à
+installer *avant* de lancer `install.sh` — le script ne l'installe pas et ne le
+fera pas, pour les raisons exposées ci-dessous.
+
+Marche à suivre, avec [container-compose/compose](https://github.com/container-compose/compose)
+à titre d'exemple :
+
+1. **Vérifier la version** — le plugin exige `container` **1.4.1 ou supérieur** :
+   ```bash
+   container --version
+   ```
+2. **Démarrer les services**, sans quoi aucun verbe de plugin n'apparaît :
+   ```bash
+   container system start
+   ```
+3. **Installer le plugin** depuis une release du projet. L'opération demande les
+   **droits d'administrateur**, le répertoire de plugins appartenant à `root`.
+4. **Vérifier** que le verbe est disponible :
+   ```bash
+   container compose --help
+   ```
+
+> ⚠️ **L'installeur de `container` efface le répertoire de plugins à chaque mise
+> à jour.** Le plugin est donc à réinstaller après chaque montée de version du
+> moteur, faute de quoi l'installation cessera de fonctionner sans raison
+> apparente.
+
+**Trois réserves avant de choisir cette voie :**
+
+- Ces plugins **réimplémentent Compose partiellement**. Or la pile séquence
+  `garage-config → garage → garage-init` via
+  `depends_on: condition: service_healthy`. Si cette condition n'est pas
+  honorée, `garage-init` démarre trop tôt et échoue.
+- L'installation du plugin **exige `sudo`**, alors que rien d'autre dans cette
+  procédure n'en demande.
+- Elle est **à refaire à chaque mise à jour** du moteur.
+
+`install.sh` détecte tout cela, vous prévient et demande confirmation avec
+**non** par défaut. **Docker et Podman n'imposent aucune de ces contraintes** —
+préférez-les si vous en avez le choix.
+
+### Interfaces graphiques
+
+Aucune n'est fournie par Apple, mais plusieurs projets communautaires facilitent
+l'administration du moteur : [Orchard](https://github.com/andrew-waters/orchard),
+[Container Desktop](https://github.com/PenningLabs/container-desktop),
+[AppleContainerGUI](https://github.com/KeepCoolCH/AppleContainerGUI).
+
+Elles pilotent la CLI `container` : elles rendent l'administration plus
+confortable mais **n'apportent pas le support compose**, qui reste le plugin
+séparé décrit ci-dessus.
 
 ### Si aucun n'est installé
 
