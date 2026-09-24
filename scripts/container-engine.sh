@@ -57,6 +57,20 @@ CE_CONTAINER_PLUGIN=0
 
 ce_has() { command -v "$1" >/dev/null 2>&1; }
 
+# ce_conseil_installation — indication adaptée au système hôte. Conseiller
+# « brew install » ou Docker Desktop à un administrateur Debian n'aide personne.
+ce_conseil_installation() {
+    if [ "$(uname -s)" = "Darwin" ]; then
+        printf '%s' "Installez Podman (brew install podman && podman machine init && podman machine start) ou Docker Desktop."
+    elif [ -r /etc/debian_version ]; then
+        printf '%s' "Installez Docker (apt install docker.io docker-compose-plugin) ou Podman (apt install podman podman-compose)."
+    elif [ -r /etc/redhat-release ]; then
+        printf '%s' "Installez Podman (dnf install podman podman-compose) ou Docker (dnf install docker-ce docker-compose-plugin)."
+    else
+        printf '%s' "Installez Docker avec son plugin Compose v2, ou Podman, via le gestionnaire de paquets de votre distribution."
+    fi
+}
+
 # ce_in_found <nom> — le moteur figure-t-il parmi ceux détectés ?
 ce_in_found() {
     case " $CE_FOUND " in
@@ -83,7 +97,7 @@ ce_detect() {
 
     CE_ENGINE=""; CE_ENGINE_LABEL=""; CE_COMPOSE=""; CE_ERROR=""; CE_CONTAINER_PLUGIN=0
     ce_scan || {
-        CE_ERROR="Aucun moteur de conteneurs détecté. Installez Podman (brew install podman) ou Docker Desktop."
+        CE_ERROR="Aucun moteur de conteneurs détecté. $(ce_conseil_installation)"
         return 1
     }
 
@@ -106,7 +120,7 @@ ce_detect() {
     fi
 
     if [ -z "$CE_ENGINE" ]; then
-        CE_ERROR="Aucun moteur utilisable. Installez Podman (brew install podman && podman machine init && podman machine start) ou Docker Desktop."
+        CE_ERROR="Aucun moteur utilisable. $(ce_conseil_installation)"
         return 1
     fi
 

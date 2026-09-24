@@ -449,6 +449,39 @@ step_mode() {
 
 # ── Étape 3 — Fichier .env ────────────────────────────────────────────────────
 
+# reporter_nouvelles_cles — mode mise à jour.
+#
+# Une relance sur une installation existante conserve le .env en place, mais une
+# version ultérieure peut avoir introduit des variables que ce fichier ignore —
+# elles prendraient alors leur valeur par défaut dans le code, souvent vide, et
+# désactiveraient une fonctionnalité sans le dire. On reporte donc depuis
+# .env.example toute clé absente, avec sa valeur d'exemple, en annonçant
+# lesquelles pour que l'utilisateur puisse les relire.
+reporter_nouvelles_cles() {
+    local ligne cle ajoutees=""
+    while IFS= read -r ligne; do
+        case "$ligne" in
+            [A-Za-z_]*=*)
+                cle="${ligne%%=*}"
+                if ! grep -qE "^${cle}=" "$ENV_FILE" 2>/dev/null; then
+                    set_env "$cle" "${ligne#*=}"
+                    ajoutees="$ajoutees $cle"
+                fi
+                ;;
+        esac
+    done < .env.example
+
+    if [[ -n "$ajoutees" ]]; then
+        warn "Variables apparues depuis votre installation, ajoutées avec leur valeur d'exemple :"
+        for cle in $ajoutees; do
+            printf "%b\n" "         ${BOLD}${cle}${NC}=$(get_env "$cle")"
+        done
+        warn "Relisez-les dans .env — certaines conditionnent des fonctionnalités."
+    else
+        success "Aucune variable nouvelle à reporter"
+    fi
+}
+
 # cle_api_absente — message affiché quand l'utilisateur n'a pas encore sa clé.
 # L'installation se poursuit : la pile se monte, seul le chat reste muet. On
 # marque une pause pour que la consigne soit lue avant le défilement des logs.
@@ -508,8 +541,9 @@ step_env() {
             cp .env.example "$ENV_FILE"
             success "Nouveau .env créé depuis .env.example"
         else
-            info ".env existant conservé — seules les valeurs manquantes sont complétées."
+            info ".env existant conservé — vos valeurs ne sont pas écrasées."
             info "Pour repartir d'un fichier neuf : ./install.sh --reinstall"
+            reporter_nouvelles_cles
         fi
     else
         cp .env.example "$ENV_FILE"
