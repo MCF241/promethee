@@ -139,8 +139,8 @@ npm run dev
 # Interface disponible sur http://localhost:5173
 ```
 
-> En développement, le frontend (port 5173) proxifie les requêtes API vers le backend (port 8000).  
-> Pour un build de production servi par FastAPI : `npm run build` — l'interface sera alors sur http://localhost:8000.
+> En développement, le frontend (port 5173) appelle directement le backend (port 8000) : l'URL de l'API est fournie par `frontend/.env.development`.  
+> Pour un build de production servi par FastAPI : `npm run build` — les URL deviennent alors relatives et l'interface est servie par le backend lui-même, sur http://localhost:8000 en local.
 
 ---
 
@@ -217,6 +217,33 @@ docker compose ps
 ✅ Résultat attendu : `promethee`, `qdrant` et `garage` affichent `Up ... (healthy)`. Les services one-shot `garage-config` et `garage-init` affichent `Exited (0)`.
 
 L'application est accessible sur **http://localhost:8000**.
+
+### Accès depuis un autre poste (mode serveur)
+
+Le frontend compilé émet des URL **relatives** : il s'adresse toujours à l'origine
+depuis laquelle il a été chargé. Aucune reconstruction de l'image n'est donc
+nécessaire pour changer de nom de domaine — exposer le port 8000, ou placer un
+reverse proxy devant, suffit.
+
+Deux points de vigilance :
+
+- **WebSocket** — le schéma suit automatiquement celui de la page (`wss://` sous
+  HTTPS). Le reverse proxy doit relayer les en-têtes `Upgrade` et `Connection`,
+  faute de quoi le flux de chat restera muet.
+- **`ALLOWED_ORIGINS`** — sans objet ici : le frontend étant servi par FastAPI sur
+  la même origine, CORS n'est pas déclenché. Cette variable ne sert que si vous
+  servez le frontend séparément.
+
+Dans ce dernier cas (frontend sur un domaine distinct), indiquez l'API **au moment
+du build**, les variables Vite étant figées dans le bundle compilé :
+
+```bash
+VITE_API_URL=https://api.example.org VITE_WS_URL=wss://api.example.org npm run build
+```
+
+et renseignez alors `ALLOWED_ORIGINS` avec l'origine du frontend.
+
+---
 
 ---
 

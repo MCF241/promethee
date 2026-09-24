@@ -5,6 +5,34 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) — versioning
 
 ---
 
+## [Non publié]
+
+### Corrigé
+- **URL d'API figée dans le bundle de production — application inutilisable en mode serveur** : les points d'appel du frontend déclaraient chacun `const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000"`, or ni le `Dockerfile` (`npm run build`) ni le `docker-compose.yml` ne transmettent `VITE_API_URL` au build — Vite figeait donc la valeur de repli dans le JS compilé. Comme `server/main.py` sert la SPA en *same-origin* (`app.mount("/", StaticFiles(...), html=True)`), un visiteur distant téléchargeait une application appelant `http://localhost:8000`, c'est-à-dire **sa propre machine** : l'application ne fonctionnait qu'en naviguant depuis l'hôte du conteneur
+- **Schéma WebSocket figé en `ws://`** : `useAgentStream.ts` reposait sur `ws://localhost:8000` ; derrière TLS, un `ws://` appelé depuis une page `https://` est bloqué par le navigateur (*mixed content*), rendant le flux de chat inopérant en HTTPS. Le schéma est désormais déduit de `window.location.protocol` (`wss://` automatique)
+- **`.env.example` — `ALLOWED_ORIGINS` sans valeur utile** : l'exemple `["http://localhost:8000"]` ne correspondait à aucune origine réelle — en production same-origin, CORS n'est pas déclenché, et en développement le navigateur émet depuis le port 5173 servi par Vite ; valeur alignée sur `["http://localhost:5173"]`, conformément au défaut déjà présent dans `server/main.py`
+- **`.env.example` — modèle LLM inexistant au catalogue Albert** : l'exemple proposait `mistralai/Mistral-Small-3.1-24B-Instruct-2503`, un identifiant que l'API n'expose plus (elle sert désormais `mistral-small-3-2-24b-instruct-2506`). Toute installation neuve partait donc sur un `404 Not Found` à la première question posée dans le chat, sans message explicite. Valeur mise à jour, avec la commande permettant de lister les modèles réellement disponibles et un rappel du suffixe `/v1` obligatoire sur `OPENAI_API_BASE`
+- **`.env.example` — `EMBEDDING_MODE` et `EMBEDDING_MODEL` totalement absents** : `core/config.py` les fait défaut à la chaîne vide, et `core/rag_engine.py` n'accepte que `api` — toute installation neuve journalisait donc `[RAG] EMBEDDING_MODE '' non supporté` et démarrait avec le RAG et la mémoire long terme silencieusement désactivés, sans que rien ne le signale dans l'interface. Les deux variables sont désormais documentées et renseignées (`api` / `bge-m3`, le modèle d'embeddings d'Albert, vérifié à 1024 dimensions)
+
+### Ajouté
+- **Module `frontend/src/lib/config.ts`** : source unique des origines HTTP et WebSocket. `API_BASE` vaut `""` par défaut — les requêtes deviennent relatives et suivent le domaine sur lequel l'application est déployée, sans reconstruire l'image. `WS_BASE` est dérivé de `window.location`. Les deux restent surchargeables par `VITE_API_URL` / `VITE_WS_URL` pour les déploiements où le frontend est servi séparément
+- **`frontend/.env.development`** : pointe explicitement le frontend vers FastAPI (port 8000) en développement, où Vite (port 5173) et l'API constituent deux origines distinctes — le flux de travail existant est inchangé
+
+### Modifié
+- **11 points d'appel unifiés** : 10 déclarations locales de `BASE` / `WS_BASE` et une expression inline dans `App.tsx` remplacées par un import depuis `lib/config.ts`, réparties sur 9 fichiers — `lib/api.ts`, `lib/docx.ts`, `App.tsx`, `hooks/useAuth.ts`, `hooks/useAgentStream.ts`, `components/vfs/VfsPanel.tsx`, `components/rag/RagPanel.tsx`, `components/chat/ChatInput.tsx`, `components/admin/IngestPanel.tsx`
+- **Proxy de développement retiré de `vite.config.ts`** : les règles `/api` et `/ws` étaient sans effet — le frontend n'a jamais appelé de route préfixée par `/api` (les routes réelles sont `/auth`, `/rag`, `/vfs`…), et le WebSocket vise directement le port 8000 via `VITE_WS_URL`. Cette configuration morte était à l'origine de l'affirmation erronée du README (« le frontend proxifie les requêtes API »)
+
+### Connu — non corrigé
+- **Jeton expiré : l'interface reste bloquée sur « Chargement… »** : quand le JWT du
+  `localStorage` n'est plus valide (expiration, rotation de `PROMETHEE_SECRET_KEY`,
+  réinstallation), le frontend enchaîne les 401 sans jamais revenir à l'écran de
+  connexion. Reproduit en conditions réelles : 10 appels en 401 d'affilée, page figée,
+  débloquée seulement en vidant le `localStorage`. Le correctif relève de la gestion du
+  401 côté frontend et sort du périmètre de cette branche ; contournement documenté dans
+  `documentation/guide_installation_script.md`
+
+---
+
 ## [3.0.4] — 2026-05-24
 
 ### Corrigé

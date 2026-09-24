@@ -25,6 +25,7 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { getToken } from "./useAuth";
+import { WS_BASE } from "../lib/config";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -107,8 +108,6 @@ export interface SendPayload {
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────
-
-const WS_BASE = import.meta.env.VITE_WS_URL ?? "ws://localhost:8000";
 
 function makeId() {
   return Math.random().toString(36).slice(2, 10);

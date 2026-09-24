@@ -49,6 +49,7 @@ import { EChartsBlock } from "./EChartsBlock";
 import { markdownToHtml } from "../../lib/markdownToHtml";
 
 import "katex/dist/katex.min.css";
+import { copierTexte, copierHtml } from "../../lib/clipboard";
 
 // ── Normalisation LaTeX ────────────────────────────────────────────────────
 
@@ -106,13 +107,11 @@ const CopyButtons = memo(function CopyButtons({ rawContent, visible }: CopyButto
   const { state: stateRtf, copy: copyRtf } = useCopy();
 
   const handleCopyRaw = () =>
-    copyRaw(() => navigator.clipboard.writeText(rawContent));
+    copyRaw(() => copierTexte(rawContent));
 
   const handleCopyRtf = () =>
     copyRtf(async () => {
-      const html = markdownToHtml(rawContent);
-      const blob = new Blob([html], { type: "text/html" });
-      await navigator.clipboard.write([new ClipboardItem({ "text/html": blob })]);
+      await copierHtml(markdownToHtml(rawContent), rawContent);
     });
 
   const labelRaw = stateRaw === "ok" ? "✓ Copié" : stateRaw === "err" ? "✗ Erreur" : "Copier (brut)";
