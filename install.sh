@@ -350,10 +350,12 @@ step_prerequis() {
     # et la pile repose entièrement sur le séquencement par healthcheck.
     if [[ "$CE_CONTAINER_PLUGIN" -eq 1 ]]; then
         warn "Compose est ici fourni par un plugin tiers du moteur d'Apple."
-        warn "La pile séquence garage-config → garage → garage-init via"
-        warn "'depends_on: condition: service_healthy'. Si le plugin n'honore pas"
-        warn "cette condition, garage-init démarrera trop tôt et échouera."
-        confirm "Continuer avec ce moteur ?" "n" || die "Installation interrompue. Podman ou Docker restent les moteurs éprouvés."
+        warn "Mesuré sur le plugin de référence (compose 0.4.0) : seuls 'up' et"
+        warn "'down' sont implémentés, et 'up' n'accepte ni -d ni --build."
+        warn "Or l'installation et prom.sh utilisent aussi ps, logs, restart,"
+        warn "build, exec et down -v. Attendez-vous à des échecs."
+        warn "Podman et Docker couvrent l'ensemble de ces commandes."
+        confirm "Continuer malgré tout ?" "n" || die "Installation interrompue. Podman ou Docker restent les moteurs éprouvés."
     fi
 
     need_cmd openssl || die "openssl est introuvable : il est nécessaire pour générer les secrets."
@@ -573,6 +575,15 @@ step_env() {
     # Réseau — dépend du mode choisi.
     set_env SERVER_PORT   "$PORT"
     set_env BIND_ADDRESS  "$BIND_ADDRESS"
+
+    # Un moteur imposé doit l'être aussi pour prom.sh : sans cela, la gestion
+    # au quotidien redétecterait et pourrait s'adresser à un autre moteur que
+    # celui qui héberge la pile. Rien n'est mémorisé si le moteur a été détecté
+    # automatiquement, pour que la détection reste libre de s'adapter.
+    if [[ -n "$MOTEUR" ]]; then
+        set_env PROMETHEE_MOTEUR "$ENGINE"
+        success "Moteur ${BOLD}${ENGINE}${NC} mémorisé dans .env — prom.sh l'utilisera aussi"
+    fi
     # Same-origin : FastAPI sert la SPA, CORS n'est pas déclenché. On aligne
     # tout de même la valeur sur l'origine réelle, utile si le frontend venait
     # à être servi séparément.

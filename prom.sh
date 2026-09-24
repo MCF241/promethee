@@ -33,6 +33,7 @@ NC='\033[0m' # No Color
 # ── Moteur de conteneurs (renseignés par main → ce_detect) ────────────────────
 ENGINE=""
 DC=""
+moteur=""
 
 # ── Services connus ───────────────────────────────────────────────────────────
 ALL_SERVICES="promethee qdrant garage garage-config garage-init"
@@ -349,7 +350,15 @@ main() {
             [[ -f scripts/container-engine.sh ]] || die "scripts/container-engine.sh introuvable."
             # shellcheck source=scripts/container-engine.sh
             source scripts/container-engine.sh
-            ce_detect "${PROMETHEE_MOTEUR:-}" || die "$CE_ERROR"
+            # Priorité : variable d'environnement explicite, puis choix
+            # mémorisé dans .env par install.sh --moteur, puis détection.
+            # On lit la clé au grep plutôt que de sourcer .env, qui contient
+            # des secrets et des valeurs non prévues pour être évaluées.
+            moteur="${PROMETHEE_MOTEUR:-}"
+            if [[ -z "$moteur" && -f .env ]]; then
+                moteur="$(grep -E '^PROMETHEE_MOTEUR=' .env 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '\r')"
+            fi
+            ce_detect "$moteur" || die "$CE_ERROR"
             ENGINE="$CE_ENGINE"
             DC="$CE_COMPOSE"
             ;;
