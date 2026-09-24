@@ -2,6 +2,9 @@
 # =============================================================================
 #  prom.sh — Script utilitaire pour la gestion de la stack Prométhée AI
 # =============================================================================
+#  Le moteur de conteneurs (Docker ou Podman) est détecté automatiquement via
+#  scripts/container-engine.sh, la même bibliothèque que install.sh.
+#
 #  Usage : ./prom.sh <commande> [options]
 #
 #  Commandes disponibles :
@@ -26,6 +29,10 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
+
+# ── Moteur de conteneurs (renseignés par main → ce_detect) ────────────────────
+ENGINE=""
+DC=""
 
 # ── Services connus ───────────────────────────────────────────────────────────
 ALL_SERVICES="promethee qdrant garage garage-config garage-init"
@@ -157,11 +164,11 @@ cmd_build() {
 
     # --backend-only : on cible uniquement le stage Python (skip le stage Node)
     # Attention : --target n'est possible qu'en build direct, pas via compose.
-    # On passe par docker build directement dans ce cas.
+    # On passe par un build direct du moteur dans ce cas.
     if $backend_only; then
         header "Build backend-only (stage Python) de promethee"
-        warn "Mode --backend-only : build direct via docker build (bypass compose)"
-        docker build \
+        warn "Mode --backend-only : build direct via ${ENGINE} build (bypass compose)"
+        $ENGINE build \
             "${extra_args[@]}" \
             --target app \
             -t promethee-docker-promethee:latest \
@@ -173,11 +180,11 @@ cmd_build() {
 
     if [[ -n "$service" ]]; then
         header "Build du service : ${service}"
-        docker compose build "${extra_args[@]}" "$service"
+        $DC build "${extra_args[@]}" "$service"
         success "Service '$service' reconstruit."
     else
         header "Build de toute la stack"
-        docker compose build "${extra_args[@]}"
+        $DC build "${extra_args[@]}"
         success "Stack reconstruite."
     fi
 }
@@ -206,11 +213,11 @@ cmd_up() {
 
     if [[ -n "$service" ]]; then
         header "Démarrage du service : ${service}"
-        docker compose up "${compose_args[@]}" "$service"
+        $DC up "${compose_args[@]}" "$service"
         success "Service '$service' démarré."
     else
         header "Démarrage de la stack complète"
-        docker compose up "${compose_args[@]}"
+        $DC up "${compose_args[@]}"
         success "Stack démarrée."
         echo ""
         printf "%b\n" "  ${GREEN}→ Application${NC}  http://localhost:${SERVER_PORT:-8000}"
@@ -233,13 +240,18 @@ cmd_down() {
 
     if $rm_volumes; then
         warn "⚠️  Suppression des volumes — toutes les données seront perdues !"
-        read -r -p "Confirmer ? [y/N] " confirm
-        [[ "${confirm,,}" == "y" ]] || { info "Annulé."; return; }
+        # Pas de ${var,,} ici : bash 3.2, le bash par défaut de macOS, ne
+        # connaît pas cette expansion et sortirait en « bad substitution ».
+        read -r -p "Confirmer ? [o/N] " reponse
+        case "$reponse" in
+            o|O|oui|Oui|OUI|y|Y|yes|Yes|YES) ;;
+            *) info "Annulé."; return ;;
+        esac
         header "Arrêt et suppression des containers + volumes"
-        docker compose down -v
+        $DC down -v
     else
         header "Arrêt et suppression des containers"
-        docker compose down
+        $DC down
     fi
     success "Stack arrêtée."
 }
@@ -249,7 +261,13 @@ cmd_restart() {
     require_service_arg "${1:-}"
     local service="$1"
     header "Redémarrage du service : ${service}"
-    docker compose restart "$service"
+    $DC restart "$service"
+    # `compose restart` redémarre le processus sans recréer le conteneur : les
+    # valeurs d'env_file déjà injectées restent celles du démarrage précédent.
+    if [[ "$service" == "promethee" ]]; then
+        warn "Un redémarrage ne relit PAS le fichier .env."
+        warn "Après modification de .env, utilisez : ./prom.sh up $service"
+    fi
     success "Service '$service' redémarré."
 }
 
@@ -279,16 +297,16 @@ cmd_logs() {
 
     header "Logs de ${service} (${lines} lignes)"
     if $follow; then
-        docker compose logs -f --tail="$lines" "$service"
+        $DC logs -f --tail="$lines" "$service"
     else
-        docker compose logs --tail="$lines" "$service"
+        $DC logs --tail="$lines" "$service"
     fi
 }
 
 # ── Commande : status ─────────────────────────────────────────────────────────
 cmd_status() {
     header "État de la stack Prométhée"
-    docker compose ps
+    $DC ps
 }
 
 # ── Commande : shell ──────────────────────────────────────────────────────────
@@ -298,8 +316,8 @@ cmd_shell() {
 
     header "Shell dans le container : ${service}"
     # promethee tourne en utilisateur non-root ; on essaie bash puis sh
-    docker compose exec "$service" bash 2>/dev/null \
-        || docker compose exec "$service" sh
+    $DC exec "$service" bash 2>/dev/null \
+        || $DC exec "$service" sh
 }
 
 # ── Commande : clean ──────────────────────────────────────────────────────────
@@ -307,25 +325,35 @@ cmd_clean() {
     local clean_all=false
     [[ "${1:-}" == "--all" ]] && clean_all=true
 
-    header "Nettoyage des images Docker"
+    header "Nettoyage des images ${ENGINE}"
     if $clean_all; then
         warn "Suppression de toutes les images non utilisées..."
-        docker image prune -a -f
+        $ENGINE image prune -a -f
     else
         info "Suppression des images orphelines (dangling)..."
-        docker image prune -f
+        $ENGINE image prune -f
     fi
     success "Nettoyage terminé."
 }
 
 # ── Point d'entrée ────────────────────────────────────────────────────────────
 main() {
-    # Vérifier que docker compose est disponible
-    docker compose version &>/dev/null || die "docker compose n'est pas disponible."
-
     # Se positionner dans le répertoire du script (où se trouve docker-compose.yml)
     cd "$(dirname "$(realpath "$0")")"
     [[ -f "docker-compose.yml" ]] || die "docker-compose.yml introuvable dans $(pwd). Placez prom.sh à la racine du projet."
+
+    # `help` doit rester consultable même sans moteur installé.
+    case "${1:-help}" in
+        help|-h|--help) : ;;
+        *)
+            [[ -f scripts/container-engine.sh ]] || die "scripts/container-engine.sh introuvable."
+            # shellcheck source=scripts/container-engine.sh
+            source scripts/container-engine.sh
+            ce_detect "${PROMETHEE_MOTEUR:-}" || die "$CE_ERROR"
+            ENGINE="$CE_ENGINE"
+            DC="$CE_COMPOSE"
+            ;;
+    esac
 
     local cmd="${1:-help}"
     shift || true

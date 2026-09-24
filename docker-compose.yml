@@ -158,7 +158,10 @@ services:
       GARAGE_REGION:   "garage"
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-["http://localhost:8000"]}
     ports:
-      - "${SERVER_PORT:-8000}:8000"
+      # BIND_ADDRESS décide de l'exposition : 127.0.0.1 pour une installation
+      # locale (joignable seulement depuis cette machine), 0.0.0.0 pour une
+      # instance serveur. Renseigné par ./install.sh selon le mode choisi.
+      - "${BIND_ADDRESS:-0.0.0.0}:${SERVER_PORT:-8000}:8000"
     volumes:
       - promethee_data:/app/data
       - promethee_logs:/app/logs
